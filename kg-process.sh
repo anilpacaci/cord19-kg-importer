@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # default parameter in case importer.conf does not exist
-NEO4J_HOME="/Users/anilpacaci/Projects/covid/neo4j-community-3.5.17"
+NEO4J_HOME="/tuna1/scratch/apacaci/neo4j-community-3.5.17"
 
-KG_HOME="/Users/anilpacaci/Projects/covid/KG"
+KG_HOME="/tuna1/scratch/apacaci/KG"
 
 CSV_FIELD_SEPERATOR="\t"
 CSV_PROPERTY_SEPERATOR="|"
@@ -57,10 +57,11 @@ flatten_parent()
     	exit 1
     fi
 
-   	awk -F \t 'BEGIN{OFS="\t"} {len = split($'$PARENT_FIELD', parents, "|");   for(i=1; i <= len; i++ ) print $'$SOURCE_FIELD', parents[i]  }' \
+   	awk -F '\t' 'BEGIN{OFS="\t"} {len = split($'$PARENT_FIELD', parents, "|");   for(i=1; i <= len; i++ ) print $'$SOURCE_FIELD', parents[i]  }' \
    		$FILENAME > $PARENT_FILENAME
 
 }
+
 
 # invoke neo4j-admin import tool
 invoke_import()
@@ -75,10 +76,13 @@ invoke_import()
 	--nodes:GENE ${KG_IMPORT_DIR}/gene-header.csv,${KG_HOME}/genes.csv \
 	--relationships:CHEMICAL_DISEASE_IXN ${KG_IMPORT_DIR}/chemical-disease-header.csv,${KG_HOME}/chemicals_diseases_relation.csv \
 	--relationships:GENE_DISEASE_IXN ${KG_IMPORT_DIR}/gene-disease-header.csv,${KG_HOME}/genes_diseases_relation.csv \
-	--relationships:CHEMICAL_GENE_IXN ${KG_IMPORT_DIR}/chemical-gene-header.csv,${KG_HOME}/chem_gene_ixns_relation.csv \
+	--relationships:CHEMICAL_GENE_IXN ${KG_IMPORT_DIR}/chemical-gene-header.csv,${KG_IMPORT_DIR}/chem_gene_ixns_relation_updated.csv \
 	--relationships:PARENT ${KG_IMPORT_DIR}/disease-parent-header.csv,${KG_IMPORT_DIR}/disease-parent.csv \
 	--relationships:PARENT ${KG_IMPORT_DIR}/chemical-parent-header.csv,${KG_IMPORT_DIR}/chemical-parent.csv
 }
+
+#chem_gene_ixns require prefix MESH on each chemical
+awk -F '\t' 'BEGIN{OFS="\t"}  {if(NR>1) $1="MESH:"$1; print }' ${KG_HOME}/chem_gene_ixns_relation.csv > ${KG_IMPORT_DIR}/chem_gene_ixns_relation_updated.csv
 
 # flatten parent relationships
 flatten_parent ${KG_HOME}/diseases.csv ${KG_IMPORT_DIR}/disease-parent.csv 2 4
