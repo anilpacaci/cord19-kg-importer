@@ -9,12 +9,14 @@ CSV_FIELD_SEPERATOR="\t"
 CSV_PROPERTY_SEPERATOR="|"
 
 # include conf file if it is defined
-if [ -f ./importer.conf ]; then
-    . importer.conf
+if [ -f ./kg.conf ]; then
+    . kg.conf
 fi
 
 # set variables to be used in the script
 KG_IMPORT_DIR=${KG_HOME}/import
+# create the impor directory
+mkdir -p ${KG_IMPORT_DIR}
 
 # input files
 CHEM_GENE_IXNS_RELATION=${KG_HOME}/chem_gene_ixns_relation.csv
@@ -97,7 +99,7 @@ write_csv ${KG_IMPORT_DIR}/gene-header.csv 'GeneSymbol\tGeneName\tGeneID:ID(Gene
 
 # create header file for each edge type
 write_csv ${KG_IMPORT_DIR}/chemical-disease-header.csv ':START_ID(Chemical-ID)\t:END_ID(Disease-ID)\tpmids'
-write_csv ${KG_IMPORT_DIR}/gene-disease-header.csv ':START_ID(Gene-ID)\t:END_ID(Disease-ID)\tmpids'
+write_csv ${KG_IMPORT_DIR}/gene-disease-header.csv ':START_ID(Gene-ID)\t:END_ID(Disease-ID)\tpmids'
 write_csv ${KG_IMPORT_DIR}/chemical-gene-header.csv ':START_ID(Chemical-ID)\t:END_ID(Gene-ID)\tOrganism\tOrganismID\tInteraction\tInterationActions\tpmids'
 # create header file for each parent relationship
 write_csv ${KG_IMPORT_DIR}/disease-parent-header.csv ':START_ID(Disease-ID)\t:END_ID(Disease-ID)'
