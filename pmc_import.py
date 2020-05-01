@@ -19,7 +19,7 @@ for input_dir in args.input_dir:
 	
 	# read each json file and populate the pandas data frame
 	for file in files:
-		with open(file) as pmc_json_file:
+		with open(file, 'rb') as pmc_json_file:
 			pmc_data = json.load(pmc_json_file)
 			# process only if publication has pmid
 			if 'pmid' in pmc_data:
@@ -35,5 +35,5 @@ for input_dir in args.input_dir:
 			else:
 				print('File does not contain pmid:{}'.format(file))
 # dump contents of the dataframe to output file
-df.to_csv(args.output_file[0])
+df.to_csv(args.output_file[0], sep='\t', index=False, index_label=False)
 print('{} rows written into {}'.format(df.shape[0], args.output_file))
