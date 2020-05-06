@@ -8,7 +8,7 @@ Neo4j importer script for bulk loading [BLENDER LAB Coronavirus Knowledge Graph]
 
 2. The provided script uses `neo4j-admin` tool for bulk loading, therefore, a local Neo4j installation is requited. Download Neo4j Community Edition v3.5.17 (or above)
 
-3. Set following configuration parameters in `kg-process.sh`
+3. Set following configuration parameters in `kg.conf`
     1. `KG_HOME`: the absolute path of the extracted knowledge path
     2. `NEO4J_HOME`: the absolute path of the local Neo4j installation
 
@@ -16,13 +16,13 @@ Neo4j importer script for bulk loading [BLENDER LAB Coronavirus Knowledge Graph]
 
 ``` $ rm -rf [NEO4J_HOME]/data/databases/graph.db/```
 
-5. `kg-process.sh` uses `awk`, make sure `awk` is installed on the system.
+5. `importer.sh` uses `awk`, make sure `awk` is installed on the system.
 
 ```$ sudo apt-get install gawk```
 
 6. Run the import script
 
-``` $ ./kg-process.sh ```
+``` $ ./importer.sh ```
 
 7. Errors that occur during bulk loading are logged in `import.report`
 
