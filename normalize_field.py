@@ -7,11 +7,11 @@ import json
 
 # parsing command line argument
 parser = argparse.ArgumentParser("Normalize a hyperedge in a given ")
-parser.add_argument('-i', '--input_file' , type=str, nargs='+', required=True, help="absolute path for the input file")
-parser.add_argument('-o', '--output_dir', type=str, nargs=1, required=True, help='absolute path for output directory')
-parser.add_argumment('-s','--source', type=int, nargs=1, required=True, help='source field name')
-parser.add_argumment('-t','--target', type=int, nargs=1, required=True, help='target field name')
-parser.add_argumment('-a','--array', type=int, nargs=1, required=True, help='source field name')
+parser.add_argument('-i', '--input_file' , type=str, required=True, help="absolute path for the input file")
+parser.add_argument('-o', '--output_dir', type=str, required=True, help='absolute path for output directory')
+parser.add_argument('-s','--source', type=int, required=True, help='source field name')
+parser.add_argument('-t','--target', type=int, required=True, help='target field name')
+parser.add_argument('-a','--array', type=int, required=True, help='source field name')
 args = parser.parse_args()
 
 header = []
@@ -25,8 +25,7 @@ filename = os.path.basename(args.input_file)
 with open(args.input_file) as input_file:
 	ixnreader = csv.reader(input_file, delimiter='\t')
 	# read header seperately
-	headerstring = next(ixnreader)
-	header = headerstring.split()
+	header = next(ixnreader)
 	# read input file line by line
 	for ixn in ixnreader:
 		# read three endpoints of the hyper edge
@@ -46,31 +45,34 @@ with open(args.input_file) as input_file:
 		# finally create array edges
 		for array_element in array:
 			array_edge.append([node_id, array_element])
-
+print('Writing node file')
 # now write output files
-with open(os.path.join(args.output_dir, "node-" + filename), 'w', delimiter='\t') as file:
-	writer = csv.writer(file)
+with open(os.path.join(args.output_dir, "node-" + filename), 'w') as file:
+	writer = csv.writer(file, delimiter='\t')
 	# write header 
 	nodeheader = np.delete(header, (args.source, args.target, args.array))
 	writer.writerow(np.insert(nodeheader, 0, 'FactID').tolist())
 	writer.writerows(nodes)
 
-with open(os.path.join(args.output_dir, "source-" + filename), 'w', delimiter='\t') as file:
-	writer = csv.writer(file)
+print('Writing source edge file')
+with open(os.path.join(args.output_dir, "source-" + filename), 'w') as file:
+	writer = csv.writer(file, delimiter='\t')
 	# write header 
 	writer.writerow(['FactID', header[args.source]])
 	writer.writerows(source_edge)
 
-with open(os.path.join(args.output_dir, "target-" + filename), 'w', delimiter='\t') as file:
-	writer = csv.writer(file)
+print('Writing target edge file')
+with open(os.path.join(args.output_dir, "target-" + filename), 'w') as file:
+	writer = csv.writer(file, delimiter='\t')
 	# write header 
 	writer.writerow(['FactID', header[args.target]])
 	writer.writerows(target_edge)
 
-with open(os.path.join(args.output_dir, "array-" + filename), 'w', delimiter='\t') as file:
-	writer = csv.writer(file)
+print('Writing array edge file')
+with open(os.path.join(args.output_dir, "array-" + filename), 'w') as file:
+	writer = csv.writer(file, delimiter='\t')
 	# write header 
 	writer.writerow(['FactID', header[args.array]])
 	writer.writerows(array_edge)
 
-print("Normalizing {} is complete".format(args.input_file))
+print("Normalization {} is complete".format(args.input_file))
