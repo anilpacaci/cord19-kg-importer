@@ -57,27 +57,29 @@ flatten_parent()
     		exit 1
     	fi
 
-   	awk -F '\t' 'BEGIN{OFS="\t"} {len = split($'$PARENT_FIELD', parents, "|");   for(i=1; i <= len; i++ ) print $'$SOURCE_FIELD', parents[i]  }' \
+   	awk -F '\t' 'BEGIN{OFS="\t"} {sub("\r", "", $NF); len = split($'$PARENT_FIELD', parents, "|");   for(i=1; i <= len; i++ ) print $'$SOURCE_FIELD', parents[i]  }' \
    		$FILENAME > $PARENT_FILENAME
 
 }
 
-# utility funtion to flatten pmids for chemical_disease and gene_disease relationships
-# assumes that the input file has three fields, source, target and '|' seperated array of pmids
-flatten_disease_pmid()
-{
-	local INPUT_FILENAME=$1
-        local OUTPUT_FILENAME=$2
 
-	printf "\\n\\n ===> Flatten pmids %s" $INPUT_FILENAME
+# utility function to flatten an array field in a given file
+# it splits array using '|' delimiter and emits a new line for each value in the field
+flatten_array()
+{
+        local INPUT_FILENAME=$1
+        local OUTPUT_FILENAME=$2
+	local ARRAY_FIELD=$3	
+
+        printf "\\n\\n ===> Flatten field %s in  %s " $ARRAY_FIELD $INPUT_FILENAME
         printf "\\n"
-	
-	if [ $# -lt 2 ] ; then
-                echo "Supply input and output file names"
+        
+        if [ $# -lt 3 ] ; then
+                echo "Supply input and output file names and the field number for array"
                 exit 1
         fi
 
-	awk -F '\t' 'BEGIN{OFS="\t"} {len = split($3, pmids, "|");   for(i=1; i <= len; i++ ) print $1, $2, pmids[i]  }' \
+	awk -F '\t' 'BEGIN{OFS="\t"} {sub("\r", "", $NF); len = split($'$ARRAY_FIELD', pmids, "|");   for(i=1; i <= len; i++ ) { $'$ARRAY_FIELD'=pmids[i]; print $0 }  }' \
                 $INPUT_FILENAME > $OUTPUT_FILENAME
 }
 
@@ -112,8 +114,8 @@ ternary_to_node()
         printf "\\n\\n ===> Generate node file from ternary relation in %s" $INPUT_FILENAME
         printf "\\n"
 
-        if [ $# -lt 5 ] ; then
-                echo "Supply input and output file names, and three column numbers of the ternary relation"
+        if [ $# -lt 4 ] ; then
+                echo "Supply input and output file names, and source and target column numbers of the ternary relation"
                 exit 1
         fi
 
@@ -160,71 +162,81 @@ setup()
 {
 	# create the impor directory
         mkdir -p ${KG_IMPORT_DIR}
+	
 	#chem_gene_ixns require prefix MESH on each chemical
-	awk -F '\t' 'BEGIN{OFS="\t"}  {if(NR>1) $1="MESH:"$1; print }' ${KG_HOME}/chem_gene_ixns_relation.csv > ${KG_IMPORT_DIR}/chem_gene_ixns_relation_updated.csv
+	printf "\\n\\n ===> Update chemical prefix" $INPUT_FILENAME $SOURCE_FIELD $TARGET_FIELD
+        printf "\\n"
+
+	awk -F '\t' 'BEGIN{OFS="\t"}  {if(NR>1 && index($1, "MESH:")==0 ) $1="MESH:"$1; print }' ${KG_HOME}/chem_gene_ixns_relation.csv > ${KG_IMPORT_DIR}/chem_gene_ixns_relation.csv
+	
 	# generate publication data from pmc entities
+	printf "\\n\\n ===> Generate publication data from PMC entities"
+        printf "\\n"
+
 	python3 pmc_import.py -i ${KG_HOME}/pmcid ${KG_HOME}/pmid_abs -o  ${KG_IMPORT_DIR}/pm-entity.csv
 }
 
 flatten_arrays()
 {
 	# flatten parent relationships
-	flatten_parent ${KG_HOME}/diseases.csv ${KG_IMPORT_DIR}/disease-parent.csv 2 4
-	flatten_parent ${KG_HOME}/chemicals.csv ${KG_IMPORT_DIR}/chemical-parent.csv 2 3
+	flatten_parent ${KG_HOME}/diseases.csv ${KG_IMPORT_DIR}/diseases-parent.csv 2 4
+	flatten_parent ${KG_HOME}/chemicals.csv ${KG_IMPORT_DIR}/chemicals-parent.csv 2 3
 
 	# flatten disease header files
-	flatten_disease_pmid ${KG_HOME}/chemical_diseases_relation.csv ${KG_IMPORT_DIR}/chemical_disease_pmid.csv
-	flatten_disease_pmid ${KG_HOME}/genes_diseases_relation.csv ${KG_IMPORT_DIR}/genes_disease_pmid.csv
+	flatten_array ${KG_HOME}/chemicals_diseases_relation.csv ${KG_IMPORT_DIR}/chemicals_diseases_pmids.csv 3
+	flatten_array ${KG_HOME}/genes_diseases_relation.csv ${KG_IMPORT_DIR}/genes_diseases_pmids.csv 3
 	# remove duplicate lines
-	dedup_lines ${KG_IMPORT_DIR}/chemical_disease_pmid.csv
-	dedup_lines ${KG_IMPORT_DIR}/genes_disease_pmid.csv
+	dedup_lines ${KG_IMPORT_DIR}/chemicals_diseases_pmids.csv
+	dedup_lines ${KG_IMPORT_DIR}/genes_diseases_pmids.csv
 }
 
 ternary_normalize()
 {
 	#create nodefiles from each ternary
-        ternary_to_node ${KG_IMPORT_DIR}/chemical_disease_pmid.csv ${KG_IMPORT_DIR}/chemical_disease_pmid_node.csv 1 2
-        ternary_to_node ${KG_IMPORT_DIR}/genes_disease_pmid.csv ${KG_IMPORT_DIR}/genes_disease_pmid_node.csv 1 2
+        ternary_to_node ${KG_IMPORT_DIR}/chemicals_diseases_pmids.csv ${KG_IMPORT_DIR}/node-chemicals_diseases_pmids.csv 1 2
+        ternary_to_node ${KG_IMPORT_DIR}/genes_diseases_pmids.csv ${KG_IMPORT_DIR}/node-genes_diseases_pmids.csv 1 2
 
 	# create edge files from each ternary
-	ternary_to_binary ${KG_IMPORT_DIR}/chemical_disease_pmid.csv ${KG_IMPORT_DIR}/chemical_disease_pmid_chemical.csv 1 2 1
-	ternary_to_binary ${KG_IMPORT_DIR}/chemical_disease_pmid.csv ${KG_IMPORT_DIR}/chemical_disease_pmid_disease.csv 1 2 2
-	ternary_to_binary ${KG_IMPORT_DIR}/chemical_disease_pmid.csv ${KG_IMPORT_DIR}/chemical_disease_pmid_pmid.csv 1 2 3
-	ternary_to_binary ${KG_IMPORT_DIR}/genes_disease_pmid.csv ${KG_IMPORT_DIR}/genes_disease_pmid_gene.csv 1 2 1
-	ternary_to_binary ${KG_IMPORT_DIR}/genes_disease_pmid.csv ${KG_IMPORT_DIR}/genes_disease_pmid_disease.csv 1 2 2
-	ternary_to_binary ${KG_IMPORT_DIR}/genes_disease_pmid.csv ${KG_IMPORT_DIR}/genes_disease_pmid_pmid.csv 1 2 3
+	ternary_to_binary ${KG_IMPORT_DIR}/chemicals_diseases_pmids.csv ${KG_IMPORT_DIR}/source-chemicals_diseases_pmids.csv 1 2 1
+	ternary_to_binary ${KG_IMPORT_DIR}/chemicals_diseases_pmids.csv ${KG_IMPORT_DIR}/target-chemicals_diseases_pmids.csv 1 2 2
+	ternary_to_binary ${KG_IMPORT_DIR}/chemicals_diseases_pmids.csv ${KG_IMPORT_DIR}/array-chemicals_diseases_pmids.csv 1 2 3
+	ternary_to_binary ${KG_IMPORT_DIR}/genes_diseases_pmids.csv ${KG_IMPORT_DIR}/source-genes_diseases_pmids.csv 1 2 1
+	ternary_to_binary ${KG_IMPORT_DIR}/genes_diseases_pmids.csv ${KG_IMPORT_DIR}/target-genes_diseases_pmids.csv 1 2 2
+	ternary_to_binary ${KG_IMPORT_DIR}/genes_diseases_pmids.csv ${KG_IMPORT_DIR}/array-genes_diseases_pmids.csv 1 2 3
+
+	# finally use normalize script for chem_gene_ixns
+	python normalize_field.py -i ${KG_IMPORT_DIR}/chem_gene_ixns_relation.csv -o ${KG_IMPORT_DIR} -s 0 -t 1 -a 6 
 }
 
 # helper to create all header
 create_headers()
 {
 	# create header file for each node type
-	write_csv ${KG_IMPORT_DIR}/disease-header.csv 'DiseaseName\tDiseaseID:ID(Disease-ID)\tAltDiseaseIDs:string[]\t:IGNORE'
-	write_csv ${KG_IMPORT_DIR}/chemical-header.csv 'ChemicalName\tChemicalID:ID(Chemical-ID)\t:IGNORE'
-	write_csv ${KG_IMPORT_DIR}/gene-header.csv 'GeneSymbol\tGeneName\tGeneID:ID(Gene-ID)\tAltGeneIDs:string[]'
+	write_csv ${KG_IMPORT_DIR}/diseases-header.csv 'DiseaseName\tDiseaseID:ID(Disease-ID)\tAltDiseaseIDs:string[]\t:IGNORE'
+	write_csv ${KG_IMPORT_DIR}/chemicals-header.csv 'ChemicalName\tChemicalID:ID(Chemical-ID)\t:IGNORE'
+	write_csv ${KG_IMPORT_DIR}/genes-header.csv 'GeneSymbol\tGeneName\tGeneID:ID(Gene-ID)\tAltGeneIDs:string[]'
 	#write_csv ${KG_IMPORT_DIR}/organism-header.csv ':IGNORE\t:IGNORE\tOrganism\tOrganismID:ID(Organism-ID)\t:IGNORE\t:IGNORE\t:IGNORE'
 	#write_csv ${KG_IMPORT_DIR}/interaction-header.csv ':IGNORE\t:IGNORE\tOrganism\t:IGNORE\tInteraction\tInterationActions\pmids'
 	
 	# create header for fact nodes for ternary relations
-	write_csv ${KG_IMPORT_DIR}/chemical-disease-fact-header.csv 'FactID:ID(Fact-ID)'
-	write_csv ${KG_IMPORT_DIR}/genes-disease-fact-header.csv 'FactID:ID(Fact-ID)'
+	write_csv ${KG_IMPORT_DIR}/chemicals-diseases-fact-header.csv 'FactID:ID(Fact-ID)'
+	write_csv ${KG_IMPORT_DIR}/genes-diseases-fact-header.csv 'FactID:ID(Fact-ID)'
+	write_csv ${KG_IMPORT_DIR}/chem-gene-ixns-fact-header.csv 'FactID:ID(Fact-ID)\tOrganism\tOrganismID\tInteraction:string[]\tInterationActions:string[]'
 	write_csv ${KG_IMPORT_DIR}/pm-header.csv 'PMID:ID(PM-ID)\tPMCID\tTitle\tJournal\tAuthors:string[]\tYear'
 
 	# create header for ternary relation edges
-	write_csv ${KG_IMPORT_DIR}/chemical-disease-fact-chemical-header.csv ':START_ID(Fact-ID)\t:END_ID(Chemical-ID)'
-	write_csv ${KG_IMPORT_DIR}/chemical-disease-fact-disease-header.csv ':START_ID(Fact-ID)\t:END_ID(Disease-ID)'
-	write_csv ${KG_IMPORT_DIR}/chemical-disease-fact-pmid-header.csv ':START_ID(Fact-ID)\t:END_ID(PM-ID)'
-	write_csv ${KG_IMPORT_DIR}/genes-disease-fact-gene-header.csv ':START_ID(Fact-ID)\t:END_ID(Gene-ID)'
-        write_csv ${KG_IMPORT_DIR}/genes-disease-fact-disease-header.csv ':START_ID(Fact-ID)\t:END_ID(Disease-ID)'
-        write_csv ${KG_IMPORT_DIR}/genes-disease-fact-pmid-header.csv ':START_ID(Fact-ID)\t:END_ID(PM-ID)'	
+	write_csv ${KG_IMPORT_DIR}/fact-chemicals-header.csv ':START_ID(Fact-ID)\t:END_ID(Chemical-ID)'
+	write_csv ${KG_IMPORT_DIR}/fact-diseases-header.csv ':START_ID(Fact-ID)\t:END_ID(Disease-ID)'
+	write_csv ${KG_IMPORT_DIR}/fact-pmids-header.csv ':START_ID(Fact-ID)\t:END_ID(PM-ID)'
+	write_csv ${KG_IMPORT_DIR}/fact-genes-header.csv ':START_ID(Fact-ID)\t:END_ID(Gene-ID)'
 
 	# create header file for each edge type
 	#write_csv ${KG_IMPORT_DIR}/chemical-disease-header.csv ':START_ID(Chemical-ID)\t:END_ID(Disease-ID)\tpmids'
 	#write_csv ${KG_IMPORT_DIR}/gene-disease-header.csv ':START_ID(Gene-ID)\t:END_ID(Disease-ID)\tpmids'
-	write_csv ${KG_IMPORT_DIR}/chemical-gene-header.csv ':START_ID(Chemical-ID)\t:END_ID(Gene-ID)\tOrganism\tOrganismID\tInteraction\tInterationActions\tpmids:string[]'
+	#write_csv ${KG_IMPORT_DIR}/chemical-gene-header.csv ':START_ID(Chemical-ID)\t:END_ID(Gene-ID)\tOrganism\tOrganismID\tInteraction\tInterationActions\tpmids:string[]'
 	# create header file for each parent relationship
-	write_csv ${KG_IMPORT_DIR}/disease-parent-header.csv ':START_ID(Disease-ID)\t:END_ID(Disease-ID)'
-	write_csv ${KG_IMPORT_DIR}/chemical-parent-header.csv ':START_ID(Chemical-ID)\t:END_ID(Chemical-ID)'
+	write_csv ${KG_IMPORT_DIR}/diseases-parent-header.csv ':START_ID(Disease-ID)\t:END_ID(Disease-ID)'
+	write_csv ${KG_IMPORT_DIR}/chemicals-parent-header.csv ':START_ID(Chemical-ID)\t:END_ID(Chemical-ID)'
 }
 
 # invoke neo4j-admin import tool
@@ -235,35 +247,41 @@ invoke_import()
 
         ${NEO4J_HOME}/bin/neo4j-admin import --delimiter=${CSV_FIELD_SEPERATOR} --array-delimiter=${CSV_PROPERTY_SEPERATOR} \
         --ignore-missing-nodes true \
-        --ignore-duplicate-nodes true \
-        --nodes:CHEMICAL ${KG_IMPORT_DIR}/chemical-header.csv,${KG_HOME}/chemicals.csv \
-        --nodes:DISEASE ${KG_IMPORT_DIR}/disease-header.csv,${KG_HOME}/diseases.csv \
-        --nodes:GENE ${KG_IMPORT_DIR}/gene-header.csv,${KG_HOME}/genes.csv \
-        --nodes:FACT ${KG_IMPORT_DIR}/chemical-disease-fact-header.csv,${KG_IMPORT_DIR}/chemical_disease_pmid_node.csv \
-        --nodes:FACT ${KG_IMPORT_DIR}/genes-disease-fact-header.csv,${KG_IMPORT_DIR}/genes_disease_pmid_node.csv \
+        --nodes:CHEMICAL ${KG_IMPORT_DIR}/chemicals-header.csv,${KG_HOME}/chemicals.csv \
+        --nodes:DISEASE ${KG_IMPORT_DIR}/diseases-header.csv,${KG_HOME}/diseases.csv \
+        --nodes:GENE ${KG_IMPORT_DIR}/genes-header.csv,${KG_HOME}/genes.csv \
+        --nodes:FACT ${KG_IMPORT_DIR}/chemicals-diseases-fact-header.csv,${KG_IMPORT_DIR}/node-chemicals_diseases_pmids.csv \
+        --nodes:FACT ${KG_IMPORT_DIR}/genes-diseases-fact-header.csv,${KG_IMPORT_DIR}/node-genes_diseases_pmids.csv \
+	--nodes:FACT ${KG_IMPORT_DIR}/chemicals-genes-fact-header.csv,${KG_IMPORT_DIR}/node-chem_gene_ixns_relation.csv \
 	--nodes:PUBLICATION ${KG_IMPORT_DIR}/pm-header.csv,${KG_IMPORT_DIR}/pm-entity.csv,${KG_IMPORT_DIR}/pm-id.csv \
-	--relationships:FACT_CHEMICAL ${KG_IMPORT_DIR}/chemical-disease-fact-chemical-header.csv,${KG_IMPORT_DIR}/chemical_disease_pmid_chemical.csv \
-	--relationships:FACT_DISEASE ${KG_IMPORT_DIR}/chemical-disease-fact-disease-header.csv,${KG_IMPORT_DIR}/chemical_disease_pmid_disease.csv \
-	--relationships:FACT_PUBLICATION ${KG_IMPORT_DIR}/chemical-disease-fact-pmid-header.csv,${KG_IMPORT_DIR}/chemical_disease_pmid_pmid.csv \
-	--relationships:FACT_GENE ${KG_IMPORT_DIR}/genes-disease-fact-gene-header.csv,${KG_IMPORT_DIR}/genes_disease_pmid_gene.csv \
-        --relationships:FACT_DISEASE ${KG_IMPORT_DIR}/genes-disease-fact-disease-header.csv,${KG_IMPORT_DIR}/genes_disease_pmid_disease.csv \
-        --relationships:FACT_PUBLICATION ${KG_IMPORT_DIR}/genes-disease-fact-pmid-header.csv,${KG_IMPORT_DIR}/genes_disease_pmid_pmid.csv \
-        --relationships:CHEMICAL_GENE_IXN ${KG_IMPORT_DIR}/chemical-gene-header.csv,${KG_IMPORT_DIR}/chem_gene_ixns_relation_updated.csv \
-        --relationships:PARENT ${KG_IMPORT_DIR}/disease-parent-header.csv,${KG_IMPORT_DIR}/disease-parent.csv \
-        --relationships:PARENT ${KG_IMPORT_DIR}/chemical-parent-header.csv,${KG_IMPORT_DIR}/chemical-parent.csv
+	--relationships:FACT_CHEMICAL ${KG_IMPORT_DIR}/fact-chemicals-header.csv,${KG_IMPORT_DIR}/source-chemicals_diseases_pmids.csv \
+	--relationships:FACT_DISEASE ${KG_IMPORT_DIR}/fact-diseases-header.csv,${KG_IMPORT_DIR}/target-chemicals_diseases_pmids.csv \
+	--relationships:FACT_PUBLICATION ${KG_IMPORT_DIR}/fact-pmids-header.csv,${KG_IMPORT_DIR}/array-chemicals_diseases_pmids.csv \
+	--relationships:FACT_GENE ${KG_IMPORT_DIR}/fact-genes-header.csv,${KG_IMPORT_DIR}/source-genes_diseases_pmids.csv \
+        --relationships:FACT_DISEASE ${KG_IMPORT_DIR}/fact-diseases-header.csv,${KG_IMPORT_DIR}/target-genes_diseases_pmids.csv \
+        --relationships:FACT_PUBLICATION ${KG_IMPORT_DIR}/fact-pmids-header.csv,${KG_IMPORT_DIR}/array-genes_diseases_pmids.csv \
+        --relationships:FACT_CHEMICAL ${KG_IMPORT_DIR}/fact-chemicals-header.csv,${KG_IMPORT_DIR}/source-chem_gene_ixns_relation.csv \
+	--relationships:FACT_GENE ${KG_IMPORT_DIR}/fact-genes-header.csv,${KG_IMPORT_DIR}/target-chem_gene_ixns_relation.csv \
+	--relationships:FACT_PUBLICATION ${KG_IMPORT_DIR}/fact-pmids-header.csv,${KG_IMPORT_DIR}/array-chem_gene_ixns_relation.csv \
+	--relationships:PARENT ${KG_IMPORT_DIR}/diseases-parent-header.csv,${KG_IMPORT_DIR}/diseases-parent.csv \
+        --relationships:PARENT ${KG_IMPORT_DIR}/chemicals-parent-header.csv,${KG_IMPORT_DIR}/chemicals-parent.csv
 
-
+## --relationships:CHEMICAL_GENE_IXN ${KG_IMPORT_DIR}/chemical-gene-header.csv,${KG_IMPORT_DIR}/chem_gene_ixns_relation_updated.csv \
 ##  --relationships:CHEMICAL_DISEASE_IXN ${KG_IMPORT_DIR}/chemical-disease-header.csv,${KG_HOME}/chemicals_diseases_relation.csv \
 ##  --relationships:GENE_DISEASE_IXN ${KG_IMPORT_DIR}/gene-disease-header.csv,${KG_HOME}/genes_diseases_relation.csv \
 }
 
 # first perform setup
-setup
+#setup
+
 # flatten pmid and parent multivalued properties
-flatten_arrays
+#flatten_arrays
+
 # normalize ternary disease and gene relationships
-ternary_normalize
+#ternary_normalize
+
 # create headers required by Neo4j import
 create_headers
+
 # invoke Neo4j import tool
 invoke_import
