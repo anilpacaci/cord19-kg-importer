@@ -246,13 +246,14 @@ invoke_import()
         printf "\\n"
 
         ${NEO4J_HOME}/bin/neo4j-admin import --delimiter=${CSV_FIELD_SEPERATOR} --array-delimiter=${CSV_PROPERTY_SEPERATOR} \
-        --ignore-missing-nodes true \
+        --ignore-duplicate-nodes true \
+	--ignore-missing-nodes true \
         --nodes:CHEMICAL ${KG_IMPORT_DIR}/chemicals-header.csv,${KG_HOME}/chemicals.csv \
         --nodes:DISEASE ${KG_IMPORT_DIR}/diseases-header.csv,${KG_HOME}/diseases.csv \
         --nodes:GENE ${KG_IMPORT_DIR}/genes-header.csv,${KG_HOME}/genes.csv \
-        --nodes:FACT ${KG_IMPORT_DIR}/chemicals-diseases-fact-header.csv,${KG_IMPORT_DIR}/node-chemicals_diseases_pmids.csv \
-        --nodes:FACT ${KG_IMPORT_DIR}/genes-diseases-fact-header.csv,${KG_IMPORT_DIR}/node-genes_diseases_pmids.csv \
-	--nodes:FACT ${KG_IMPORT_DIR}/chemicals-genes-fact-header.csv,${KG_IMPORT_DIR}/node-chem_gene_ixns_relation.csv \
+        --nodes:FACT_CD ${KG_IMPORT_DIR}/chemicals-diseases-fact-header.csv,${KG_IMPORT_DIR}/node-chemicals_diseases_pmids.csv \
+        --nodes:FACT_GD ${KG_IMPORT_DIR}/genes-diseases-fact-header.csv,${KG_IMPORT_DIR}/node-genes_diseases_pmids.csv \
+	--nodes:FACT_CG ${KG_IMPORT_DIR}/chem-gene-ixns-fact-header.csv,${KG_IMPORT_DIR}/node-chem_gene_ixns_relation.csv \
 	--nodes:PUBLICATION ${KG_IMPORT_DIR}/pm-header.csv,${KG_IMPORT_DIR}/pm-entity.csv,${KG_IMPORT_DIR}/pm-id.csv \
 	--relationships:FACT_CHEMICAL ${KG_IMPORT_DIR}/fact-chemicals-header.csv,${KG_IMPORT_DIR}/source-chemicals_diseases_pmids.csv \
 	--relationships:FACT_DISEASE ${KG_IMPORT_DIR}/fact-diseases-header.csv,${KG_IMPORT_DIR}/target-chemicals_diseases_pmids.csv \
@@ -272,13 +273,13 @@ invoke_import()
 }
 
 # first perform setup
-#setup
+setup
 
 # flatten pmid and parent multivalued properties
-#flatten_arrays
+flatten_arrays
 
 # normalize ternary disease and gene relationships
-#ternary_normalize
+ternary_normalize
 
 # create headers required by Neo4j import
 create_headers
