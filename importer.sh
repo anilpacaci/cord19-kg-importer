@@ -168,12 +168,6 @@ setup()
         printf "\\n"
 
 	awk -F '\t' 'BEGIN{OFS="\t"}  {if(NR>1 && index($1, "MESH:")==0 ) $1="MESH:"$1; print }' ${KG_HOME}/chem_gene_ixns_relation.csv > ${KG_IMPORT_DIR}/chem_gene_ixns_relation.csv
-	
-	# generate publication data from pmc entities
-	printf "\\n\\n ===> Generate publication data from PMC entities"
-        printf "\\n"
-
-	python3 pmc_import.py -i ${KG_HOME}/pmcid ${KG_HOME}/pmid_abs -o  ${KG_IMPORT_DIR}/pm-entity.csv
 }
 
 flatten_arrays()
@@ -206,6 +200,32 @@ ternary_normalize()
 
 	# finally use normalize script for chem_gene_ixns
 	python normalize_field.py -i ${KG_IMPORT_DIR}/chem_gene_ixns_relation.csv -o ${KG_IMPORT_DIR} -s 0 -t 1 -a 6 
+}
+
+# helper function to generate PubMed information
+# For publicaitons with no metadata, it creates vertices with only PMID information
+create_pmids()
+{
+	# generate publication data from pmc entities
+        printf "\\n\\n ===> Generate publication data from PMC entities"
+        printf "\\n"
+
+        python3 pmc_import.py -i ${KG_HOME}/pmcid ${KG_HOME}/pmid_abs -o  ${KG_IMPORT_DIR}/pm-entity.csv
+
+	# generate publication data for remaining pmids
+        printf "\\n\\n ===> Generate publication data from relationships"
+        printf "\\n"
+
+	awk 'NR > 1 {sub("\r", "", $NF); print $2}' ${KG_IMPORT_DIR}/array-genes_diseases_pmids.csv > ${KG_IMPORT_DIR}/pm-id-gd.csv
+	awk 'NR > 1 {sub("\r", "", $NF); print $2}' ${KG_IMPORT_DIR}/array-chem_gene_ixns_relation.csv > ${KG_IMPORT_DIR}/pm-id-cg.csv
+	awk 'NR > 1 {sub("\r", "", $NF); print $2}' ${KG_IMPORT_DIR}/array-chemicals_diseases_pmids.csv > ${KG_IMPORT_DIR}/pm-id-cd.csv
+	
+	# deduplicate pmids and merge all files
+	dedup_lines ${KG_IMPORT_DIR}/pm-id-gd.csv
+	dedup_lines ${KG_IMPORT_DIR}/pm-id-cg.csv
+	dedup_lines ${KG_IMPORT_DIR}/pm-id-cd.csv
+	cat ${KG_IMPORT_DIR}/pm-id-gd.csv ${KG_IMPORT_DIR}/pm-id-cg.csv ${KG_IMPORT_DIR}/pm-id-cd.csv > ${KG_IMPORT_DIR}/pm-id.csv
+	dedup_lines ${KG_IMPORT_DIR}/pm-id.csv
 }
 
 # helper to create all header
@@ -280,6 +300,9 @@ flatten_arrays
 
 # normalize ternary disease and gene relationships
 ternary_normalize
+
+# generate publication data
+create_pmids
 
 # create headers required by Neo4j import
 create_headers
